@@ -1,4 +1,4 @@
-from re import I
+# from re import I
 import cv2
 import numpy as np
 from .camera_params import *
@@ -102,13 +102,15 @@ class MinimalPublisher(Node):
     def odometria(self):
         if cv2.getWindowProperty("odometry", 0) >= 0:
             ret, imgk = cap.read()
+
             grayk = cv2.cvtColor(imgk, cv2.COLOR_BGR2GRAY)
             grayk = cv2.GaussianBlur(grayk, (5,5), 0)
             # kpk_1 = fast.detect(grayk_1)
             # kpk = fast.detect(grayk)
-        
+
             kpk, st, err = cv2.calcOpticalFlowPyrLK(self.grayk_1, grayk, self.kpk_1, None, **lk_params)
-            E, mask = cv2.findEssentialMat(self.kpk_1, kpk, K, cv2.FM_RANSAC, 0.90, 1)
+            E, mask = cv2.findEssentialMat(self.kpk_1, kpk, K, cv2.FM_RANSAC, 0.999, 1)
+            print(E)
             ret, R_, t_, mask = cv2.recoverPose(E, self.kpk_1, kpk, K)
             
             self.t = self.R.dot(t_) + self.t
@@ -117,9 +119,11 @@ class MinimalPublisher(Node):
 
             # imgk = cv2.drawKeypoints(imgk, np.float32(self.kpk_1), None, color=(255,0,0))
             cv2.imshow('odometry', imgk)
-
-            # self.kpk_1 = fast.detect(grayk)
+                
+            # self.kpk_1 = np.array(fast.detect(self.grayk_1))
+            # print(type(self.kpk_1))
             self.kpk_1 = cv2.goodFeaturesToTrack(grayk, mask = None,  **feature_params)
+            # print(type(self.kpk_1))
             self.grayk_1 = grayk
 
             keyCode = cv2.waitKey(30) & 0xFF

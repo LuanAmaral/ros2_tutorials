@@ -15,7 +15,6 @@ find_package(OpenCV 4.1.1 REQUIRED)
 add_executable(visual_odometry src/visual_odometry.cpp)
 ament_target_dependencies(visual_odometry rclcpp geometry_msgs OpenCV)
 
-
 install(TARGETS
   visual_odometry
   DESTINATION lib/${PROJECT_NAME})

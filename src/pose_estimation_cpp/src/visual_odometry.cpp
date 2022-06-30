@@ -4,9 +4,12 @@
 #include <memory>
 #include <string>
 #include <opencv2/opencv.hpp>
+#include <opencv2/cudafeatures2d.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/features2d/features2d.hpp>
 
-#include "rclcpp/rclcpp.hpp"
-#include <geometry_msgs/msg/pose_stamped.h>
+#include "rclcpp.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 using namespace std::chrono_literals;
 
@@ -25,56 +28,45 @@ std::string gstreamer_pipeline (int capture_width, int capture_height, int displ
            std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
-std::string pipeline = gstreamer_pipeline(CAPTURE_WIDTH,CAPTURE_HEIGHT,DISPLAY_WIDTH,DISPLAY_HEIGHT,FRAME_RATE,FLIP_METHOD);
-cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
 
-class MinimalPublisher : public rclcpp::Node
-{
-public:
-  MinimalPublisher(): Node("minimal_publisher"), count_(0)
-  {
-    geometry_msgs::msg::Pos
-    publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("Pose", 10);
-    timer_=this->create_wall_timer(1/FRAME_RATE,std::bind(&MinimalPublisher::timer_callback, this));
+cv::Ptr<cv::FastFeatureDetector> fast = cv::FastFeatureDetector::create(80, true);
 
+int main(int argc, char * argv[])
+{   
+    std::string pipeline = gstreamer_pipeline(CAPTURE_WIDTH,CAPTURE_HEIGHT,DISPLAY_WIDTH,DISPLAY_HEIGHT,FRAME_RATE,FLIP_METHOD);
+    cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
     if(!cap.isOpened())
     {
-      std::cout<<"Failed to open camera."<<std::endl;
+      printf("Failed to open camera.\n");
 	    exit(-1);
     }
     cv::namedWindow("CSI Camera", cv::WINDOW_AUTOSIZE);
-  }
 
-private:
-  void visual_odometry()
-  {
-    cv::Mat img;    if (!cap.read(img)) 
+    while(1)
     {
-      printf("Capture image error.");
-      return;
+        cv::Mat img, img_gray; 
+        std::vector<cv::KeyPoint> keypoints;   
+        if (!cap.read(img)) 
+        {
+            printf("Capture image error.");
+            return;
+        }
+        // odometria
+        cvtColor( img, img_gray, cv::COLOR_BayerBG2BGR  );
+        cv::GaussianBlur(img_gray, img_gray, cv::Size(5,5), 0);
+
+        fast->detect(img_gray, keypoints);
+        cv::drawKeypoints(img_gray, keypoints, img, cv::Scalar(255,0,0));
+
+
+        cv::imshow("CSI Camera",img);
+        int keycode = cv::waitKey(10) & 0xff ; 
+        if (keycode == 27) exit(-2) ;
+
     }
-    // odometria
 
-    cv::imshow("CSI Camera",img);
-    int keycode = cv::waitKey(10) & 0xff ; 
-    if (keycode == 27) exit(-2) ;
-  }
 
-  void timer_callback()
-  {
-    visual_odometry();
-    RCLCPP_INFO(this->get_logger(), "Publishing");
-  }
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_;
-  size_t count_;
-};
 
-int main(int argc, char * argv[])
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalPublisher>());
-  rclcpp::shutdown();
   return 0;
   
 }
